@@ -1,5 +1,6 @@
 import pygame
 import random
+import time
 
 # Initialize PyGame
 pygame.init()
@@ -12,6 +13,7 @@ WORLD_SIZE = GRID_SIZE * CELL_SIZE
 PLAYER_POS = [GRID_SIZE // 2, GRID_SIZE // 2]  # Start in middle
 PLAYER_DIR = [0, -1]  # Start facing up
 ROCK_COUNT = 10
+MOVEMENT_DELAY = 0.15  # Seconds between movements when key is held
 
 # Colors
 BLACK = (0, 0, 0)
@@ -53,6 +55,7 @@ while rock_count < ROCK_COUNT:
 # Spawn initial stick
 current_stick = spawn_stick(rocks, PLAYER_POS)
 collected_sticks = 0
+last_movement_time = time.time()
 running = True
 
 def draw_grid_object(surface, color, grid_pos, camera_offset):
@@ -63,41 +66,54 @@ def draw_grid_object(surface, color, grid_pos, camera_offset):
         pygame.draw.rect(surface, color,
                         (screen_x, screen_y, CELL_SIZE-2, CELL_SIZE-2))
 
+def try_move(direction):
+    """Attempt to move in the given direction"""
+    global PLAYER_POS, PLAYER_DIR
+    new_pos = PLAYER_POS.copy()
+    new_pos[0] += direction[0]
+    new_pos[1] += direction[1]
+    PLAYER_DIR = direction
+    
+    # Check if move is valid
+    new_pos_tuple = tuple(new_pos)
+    if (0 < new_pos[0] < GRID_SIZE-1 and 
+        0 < new_pos[1] < GRID_SIZE-1 and 
+        new_pos_tuple not in rocks and
+        new_pos_tuple != current_stick):
+        PLAYER_POS = new_pos
+        return True
+    return False
+
 while running:
+    current_time = time.time()
+    
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN:
-            # Movement
-            new_pos = PLAYER_POS.copy()
-            if event.key == pygame.K_w:
-                new_pos[1] -= 1
-                PLAYER_DIR = [0, -1]
-            elif event.key == pygame.K_s:
-                new_pos[1] += 1
-                PLAYER_DIR = [0, 1]
-            elif event.key == pygame.K_a:
-                new_pos[0] -= 1
-                PLAYER_DIR = [-1, 0]
-            elif event.key == pygame.K_d:
-                new_pos[0] += 1
-                PLAYER_DIR = [1, 0]
-            
-            # Check if move is valid (not hitting rocks, borders, or sticks)
-            new_pos_tuple = tuple(new_pos)
-            if (0 < new_pos[0] < GRID_SIZE-1 and 
-                0 < new_pos[1] < GRID_SIZE-1 and 
-                new_pos_tuple not in rocks and
-                new_pos_tuple != current_stick):  # Add stick collision check
-                PLAYER_POS = new_pos
-            
-            # Stick collection
+            # Handle space key for stick collection
             if event.key == pygame.K_SPACE:
                 check_pos = (PLAYER_POS[0] + PLAYER_DIR[0], 
                            PLAYER_POS[1] + PLAYER_DIR[1])
                 if check_pos == current_stick:
                     collected_sticks += 1
                     current_stick = spawn_stick(rocks, PLAYER_POS)
+    
+    # Handle continuous movement
+    keys = pygame.key.get_pressed()
+    if current_time - last_movement_time >= MOVEMENT_DELAY:
+        moved = False
+        if keys[pygame.K_w]:
+            moved = try_move([0, -1])
+        elif keys[pygame.K_s]:
+            moved = try_move([0, 1])
+        elif keys[pygame.K_a]:
+            moved = try_move([-1, 0])
+        elif keys[pygame.K_d]:
+            moved = try_move([1, 0])
+        
+        if moved:
+            last_movement_time = current_time
 
     # Drawing
     screen.fill(BLACK)
