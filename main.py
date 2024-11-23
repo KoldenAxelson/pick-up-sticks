@@ -15,13 +15,14 @@ PLAYER_PIXEL_POS = [PLAYER_POS[0] * CELL_SIZE, PLAYER_POS[1] * CELL_SIZE]  # Act
 PLAYER_DIR = [0, -1]  # Start facing up
 ROCK_COUNT = 10
 MOVEMENT_DELAY = 0.15  # Seconds between movements when key is held
-MOVEMENT_SPEED = 4  # Pixels per frame
+MOVEMENT_SPEED = 300  # Pixels per second
 
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 100, 255)
+GREEN = (0, 255, 0)
 BROWN = (139, 69, 19)
 GRAY = (128, 128, 128)
 
@@ -62,6 +63,7 @@ current_stick = spawn_stick(rocks, PLAYER_POS)
 collected_sticks = 0
 last_movement_time = time.time()
 is_moving = False
+is_running = False
 target_pixel_pos = None
 
 def draw_grid_object(surface, color, grid_pos, camera_offset):
@@ -95,24 +97,34 @@ def try_move(direction):
 
 def update_movement():
     """Update smooth movement between cells"""
-    global PLAYER_PIXEL_POS, is_moving, target_pixel_pos
+    global PLAYER_PIXEL_POS, is_moving, is_running, target_pixel_pos
     
     if is_moving and target_pixel_pos:
         dx = target_pixel_pos[0] - PLAYER_PIXEL_POS[0]
         dy = target_pixel_pos[1] - PLAYER_PIXEL_POS[1]
+
+        # Base speed in pixels per second (not per frame)
+        base_speed = MOVEMENT_SPEED if is_running else (MOVEMENT_SPEED / 2)
         
+        # Convert speed to pixels per frame using delta time
+        dt = clock.get_time() / 1000.0  # Convert milliseconds to seconds
+        speed = base_speed * dt
+
         # Calculate movement this frame
-        if abs(dx) <= MOVEMENT_SPEED and abs(dy) <= MOVEMENT_SPEED:
+        if abs(dx) <= speed and abs(dy) <= speed:
             # Close enough to snap to target
             PLAYER_PIXEL_POS = target_pixel_pos.copy()
             is_moving = False
             target_pixel_pos = None
         else:
+            # Calculate direction vector
+            distance = (dx * dx + dy * dy) ** 0.5
+            move_x = (dx / distance) * speed if distance > 0 else 0
+            move_y = (dy / distance) * speed if distance > 0 else 0
+            
             # Move towards target
-            if dx != 0:
-                PLAYER_PIXEL_POS[0] += MOVEMENT_SPEED * (1 if dx > 0 else -1)
-            if dy != 0:
-                PLAYER_PIXEL_POS[1] += MOVEMENT_SPEED * (1 if dy > 0 else -1)
+            PLAYER_PIXEL_POS[0] += move_x
+            PLAYER_PIXEL_POS[1] += move_y
 
 while running:
     current_time = time.time()
@@ -127,6 +139,12 @@ while running:
                 if check_pos == current_stick:
                     collected_sticks += 1
                     current_stick = spawn_stick(rocks, PLAYER_POS)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LSHIFT:
+                is_running = True
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_LSHIFT:
+                is_running = False
     
     # Handle continuous movement
     if not is_moving and current_time - last_movement_time >= MOVEMENT_DELAY:
@@ -176,7 +194,7 @@ while running:
     # Draw direction indicator
     indicator_x = player_screen_x + PLAYER_DIR[0] * CELL_SIZE * 0.3 + CELL_SIZE
     indicator_y = player_screen_y + PLAYER_DIR[1] * CELL_SIZE * 0.3 + CELL_SIZE
-    pygame.draw.circle(screen, WHITE, (int(indicator_x), int(indicator_y)), 5)
+    pygame.draw.circle(screen, GREEN if is_running else WHITE, (int(indicator_x), int(indicator_y)), 5)
     
     # Draw stick counter
     font = pygame.font.Font(None, 36)
