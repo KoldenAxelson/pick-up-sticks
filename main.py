@@ -31,6 +31,7 @@ screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
 pygame.display.set_caption('Pick Up Sticks')
 clock = pygame.time.Clock()
 
+# Game State: On/Off
 running = True
 
 def spawn_stick(rocks, player_pos):
