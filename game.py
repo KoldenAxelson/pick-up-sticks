@@ -1,6 +1,6 @@
 import pygame
 import time
-from constants import WINDOW_SIZE, MOVEMENT_DELAY
+from constants import WINDOW_SIZE, MOVEMENT_DELAY, GRID_SIZE
 from entities.player import Player
 from world.game_world import GameWorld
 from renderer import Renderer
@@ -12,7 +12,7 @@ class Game:
         pygame.display.set_caption('Pick Up Sticks')
         self.clock = pygame.time.Clock()
         
-        self.player = Player()
+        self.player = Player(GRID_SIZE // 2, GRID_SIZE // 2)
         self.world = GameWorld()
         self.renderer = Renderer(self.screen)
         
@@ -27,9 +27,9 @@ class Game:
                 self.running = False
             elif event.type == pygame.KEYDOWN and not self.player.is_moving:
                 if event.key == pygame.K_SPACE:
-                    check_pos = (self.player.grid_pos[0] + self.player.direction[0],
-                               self.player.grid_pos[1] + self.player.direction[1])
-                    self.world.collect_stick(check_pos)
+                    check_pos = (self.player.x + self.player.direction[0],
+                            self.player.y + self.player.direction[1])
+                    self.world.check_collection(check_pos)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_LSHIFT:
                     self.player.is_running = True
@@ -42,20 +42,37 @@ class Game:
             keys = pygame.key.get_pressed()
             moved = False
             if keys[pygame.K_w]:
-                moved = self.player.try_move([0, -1], self.world.rocks, self.world.current_stick)
+                moved = self.player.try_move([0, -1], self.world.obstacles, self.world.items)
             elif keys[pygame.K_s]:
-                moved = self.player.try_move([0, 1], self.world.rocks, self.world.current_stick)
+                moved = self.player.try_move([0, 1], self.world.obstacles, self.world.items)
             elif keys[pygame.K_a]:
-                moved = self.player.try_move([-1, 0], self.world.rocks, self.world.current_stick)
+                moved = self.player.try_move([-1, 0], self.world.obstacles, self.world.items)
             elif keys[pygame.K_d]:
-                moved = self.player.try_move([1, 0], self.world.rocks, self.world.current_stick)
+                moved = self.player.try_move([1, 0], self.world.obstacles, self.world.items)
             
             if moved:
                 self.last_movement_time = current_time
+            
+            # Handle continuous movement
+            if not self.player.is_moving and current_time - self.last_movement_time >= MOVEMENT_DELAY:
+                keys = pygame.key.get_pressed()
+                moved = False
+                if keys[pygame.K_w]:
+                    moved = self.player.try_move([0, -1], self.world.obstacles, self.world.items)
+                elif keys[pygame.K_s]:
+                    moved = self.player.try_move([0, 1], self.world.obstacles, self.world.items)
+                elif keys[pygame.K_a]:
+                    moved = self.player.try_move([-1, 0], self.world.obstacles, self.world.items)
+                elif keys[pygame.K_d]:
+                    moved = self.player.try_move([1, 0], self.world.obstacles, self.world.items)
+                
+                if moved:
+                    self.last_movement_time = current_time
 
     def update(self):
         dt = self.clock.get_time() / 1000.0
         self.player.update(dt)
+        self.world.update(dt)
 
     def render(self):
         self.renderer.render(self.world, self.player)
