@@ -1,5 +1,5 @@
 import pygame
-from constants import CELL_SIZE, WINDOW_SIZE, BLACK, WHITE, GREEN
+from constants import CELL_SIZE, CELL_MARGIN, WINDOW_SIZE, BLACK, WHITE, GREEN
 from typing import Tuple
 
 class Renderer:
@@ -22,18 +22,22 @@ class Renderer:
                     pygame.draw.rect(self.screen, render_data['color'],
                                    (screen_x + (CELL_SIZE//2),
                                     screen_y + (CELL_SIZE//2),
-                                    CELL_SIZE-2, CELL_SIZE-2))
+                                    CELL_SIZE-CELL_MARGIN, CELL_SIZE-CELL_MARGIN))
                     
+                    # Calculate center of the player's cell
+                    center_x = screen_x + CELL_SIZE
+                    center_y = screen_y + CELL_SIZE
+
                     # Draw direction indicator
                     direction = render_data['direction']
-                    indicator_x = screen_x + direction[0] * CELL_SIZE * 0.3 + CELL_SIZE
-                    indicator_y = screen_y + direction[1] * CELL_SIZE * 0.3 + CELL_SIZE
+                    indicator_x = center_x - (CELL_MARGIN // 2) + direction[0] * (CELL_SIZE - 2 * CELL_MARGIN) * 0.5
+                    indicator_y = center_y - (CELL_MARGIN // 2) + direction[1] * (CELL_SIZE - 2 * CELL_MARGIN) * 0.5
                     pygame.draw.circle(self.screen,
                                      GREEN if render_data['is_running'] else WHITE,
                                      (int(indicator_x), int(indicator_y)), 5)
                 else:
                     pygame.draw.rect(self.screen, render_data['color'],
-                                   (screen_x, screen_y, CELL_SIZE-2, CELL_SIZE-2))
+                                   (screen_x, screen_y, CELL_SIZE-CELL_MARGIN, CELL_SIZE-CELL_MARGIN))
 
     def render(self, game_world, player):
         self.screen.fill(BLACK)

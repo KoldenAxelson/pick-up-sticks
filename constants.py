@@ -1,5 +1,6 @@
 CELL_SIZE = 30
 GRID_SIZE = 20
+CELL_MARGIN = 0
 WINDOW_SIZE = CELL_SIZE * 11  # Visible area is 11x11 with player in center
 WORLD_SIZE = GRID_SIZE * CELL_SIZE
 
