@@ -1,11 +1,9 @@
 import random
 from typing import List, Optional, Tuple, Dict
 from constants import GRID_SIZE, ROCK_COUNT
-from entities.obstacles.rock import Rock
-from entities.items.stick import Stick
-from entities.base_entity import BaseEntity
-from entities.obstacles.base_obstacle import BaseObstacle
-from entities.items.base_item import BaseItem
+from entities import *
+from entities.items import *
+from entities.obstacles import *
 
 class GameWorld:
     def __init__(self):
