@@ -42,32 +42,16 @@ class Game:
             keys = pygame.key.get_pressed()
             moved = False
             if keys[pygame.K_w]:
-                moved = self.player.try_move([0, -1], self.world.obstacles, self.world.items)
+                moved = self.player.try_move([0, -1], self.world)
             elif keys[pygame.K_s]:
-                moved = self.player.try_move([0, 1], self.world.obstacles, self.world.items)
+                moved = self.player.try_move([0, 1], self.world)
             elif keys[pygame.K_a]:
-                moved = self.player.try_move([-1, 0], self.world.obstacles, self.world.items)
+                moved = self.player.try_move([-1, 0], self.world)
             elif keys[pygame.K_d]:
-                moved = self.player.try_move([1, 0], self.world.obstacles, self.world.items)
+                moved = self.player.try_move([1, 0], self.world)
             
             if moved:
                 self.last_movement_time = current_time
-            
-            # Handle continuous movement
-            if not self.player.is_moving and current_time - self.last_movement_time >= MOVEMENT_DELAY:
-                keys = pygame.key.get_pressed()
-                moved = False
-                if keys[pygame.K_w]:
-                    moved = self.player.try_move([0, -1], self.world.obstacles, self.world.items)
-                elif keys[pygame.K_s]:
-                    moved = self.player.try_move([0, 1], self.world.obstacles, self.world.items)
-                elif keys[pygame.K_a]:
-                    moved = self.player.try_move([-1, 0], self.world.obstacles, self.world.items)
-                elif keys[pygame.K_d]:
-                    moved = self.player.try_move([1, 0], self.world.obstacles, self.world.items)
-                
-                if moved:
-                    self.last_movement_time = current_time
 
     def update(self):
         dt = self.clock.get_time() / 1000.0

@@ -11,27 +11,23 @@ class Player(BaseEntity):
         self.is_running = False
         self.target_pixel_pos = None
 
-    def try_move(self, direction, obstacles, items):
+    def try_move(self, direction, game_world) -> bool:
         """Attempt to move in the given direction"""
         new_x = self.x + direction[0]
         new_y = self.y + direction[1]
+        new_pos = (new_x, new_y)
         self.direction = direction
         
-        new_pos = (new_x, new_y)
-        
-        # Check if move is blocked by any obstacle or blocking item
-        is_blocked = (
-            any(obstacle.position == new_pos and obstacle.is_blocking 
-                for obstacle in obstacles) or
-            any(item.position == new_pos and item.is_blocking 
-                for item in items)
-        )
-        
-        if (0 < new_x < GRID_SIZE-1 and 
-            0 < new_y < GRID_SIZE-1 and 
-            not is_blocked and
-            not self.is_moving):
+        # Quick boundary check
+        if not (0 < new_x < GRID_SIZE-1 and 0 < new_y < GRID_SIZE-1):
+            return False
             
+        # Check if the target cell is blocked
+        entity = game_world.get_entity_at(new_pos)
+        if entity and entity.is_blocking:
+            return False
+        
+        if not self.is_moving:
             self.target_pixel_pos = [new_x * CELL_SIZE, new_y * CELL_SIZE]
             self.is_moving = True
             self.x, self.y = new_x, new_y
