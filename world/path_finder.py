@@ -9,13 +9,14 @@ class PathFinder:
                                for x in range(1, GRID_SIZE-1) 
                                for y in range(1, GRID_SIZE-1))
     
-    # Pre-calculate valid neighbors for each position
+    # Pre-calculate neighbors for each position
     NEIGHBORS_MAP = {
         (x, y): tuple((nx, ny) 
                       for nx, ny in [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
                       if 1 <= nx < GRID_SIZE-1 and 1 <= ny < GRID_SIZE-1)
         for x, y in VALID_POSITIONS
     }
+
 
     @classmethod
     def is_position_valid(cls, pos: Tuple[int, int]) -> bool:
@@ -26,52 +27,64 @@ class PathFinder:
     def get_neighbors(cls, pos: Tuple[int, int]) -> Tuple[Tuple[int, int], ...]:
         """Get all valid neighboring positions"""
         return cls.NEIGHBORS_MAP.get(pos, ())
+    
+    @classmethod
+    def find_all_accessible_positions(cls, rocks: Set[Tuple[int, int]], start_pos: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        """
+        Find all positions that can be reached from the start position.
+        Only rocks block movement in accessibility checking.
+        Args:
+            rocks: Set of current rock positions
+            start_pos: Starting position for the flood fill
+        Returns:
+            Set of all accessible positions
+        """
+        visited = set()
+        to_visit = {start_pos}
+        
+        while to_visit:
+            current = to_visit.pop()
+            if current not in visited and current not in rocks:
+                visited.add(current)
+                # Add all unvisited neighbors
+                to_visit.update(
+                    neighbor for neighbor in cls.NEIGHBORS_MAP[current]
+                    if neighbor not in visited and neighbor not in rocks
+                )
+        
+        return visited
 
     @classmethod
     def is_map_accessible(cls, rocks: Set[Tuple[int, int]], test_pos: Tuple[int, int] = None) -> bool:
         """
-        Check if the map remains fully accessible with the given rock positions.
-        Uses an optimized flood fill algorithm and early exit conditions.
+        Check if all non-rock positions remain accessible with the given rock configuration.
+        Only rocks (and the test_pos) are considered as blocking for accessibility.
         """
         # Quick validation for test_pos
         if test_pos and (test_pos in rocks or test_pos not in cls.VALID_POSITIONS):
             return False
 
-        # Create immutable set of rocks for efficient lookups
+        # Create set of rocks including test position
         rock_set = rocks | {test_pos} if test_pos else rocks
 
-        # Early exit if too many rocks would make it impossible to have a path
-        available_spaces = len(cls.VALID_POSITIONS - rock_set)
-        if available_spaces < 2:  # Need at least 2 spaces for movement
-            return False
-
-        # Find a starting point that isn't a rock
-        start = None
+        # Find a valid starting position that isn't a rock
+        start_pos = None
         for pos in cls.VALID_POSITIONS:
             if pos not in rock_set:
-                start = pos
+                start_pos = pos
                 break
-        
-        if start is None:
+
+        if start_pos is None:  # No empty spaces
             return False
 
-        # Use set for visited tracking - faster than dict for this use case
-        visited = {start}
-        queue = [start]  # Using list as a queue is fine for this size
-        idx = 0  # Index into queue
-
-        # Modified BFS that uses list index instead of pop(0)
-        while idx < len(queue):
-            current = queue[idx]
-            idx += 1
-
-            for neighbor in cls.NEIGHBORS_MAP[current]:
-                if neighbor not in rock_set and neighbor not in visited:
-                    visited.add(neighbor)
-                    queue.append(neighbor)
-
-        # Check if all non-rock positions are accessible
-        return len(visited) == available_spaces
+        # Get all accessible positions from this starting point
+        accessible = cls.find_all_accessible_positions(rock_set, start_pos)
+        
+        # Compare with total available positions
+        all_open_positions = cls.VALID_POSITIONS - rock_set
+        
+        # The map is fully accessible if we can reach all non-rock positions
+        return accessible == all_open_positions
 
 class PathFinderCache:
     """Optional cache wrapper for path finding results"""

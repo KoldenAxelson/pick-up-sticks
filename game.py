@@ -1,19 +1,21 @@
 import pygame
 import time
-from constants import WINDOW_SIZE, MOVEMENT_DELAY, GRID_SIZE
+from constants import WINDOW_WIDTH, WINDOW_HEIGHT, MOVEMENT_DELAY, GRID_SIZE
 from entities.player import Player
 from world.game_world import GameWorld
 from renderer import Renderer
+from stats import GameStats
 
 class Game:
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
+        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption('Pick Up Sticks')
         self.clock = pygame.time.Clock()
         
         self.player = Player(GRID_SIZE // 2, GRID_SIZE // 2)
-        self.world = GameWorld()
+        self.stats = GameStats()
+        self.world = GameWorld(self.stats)
         self.renderer = Renderer(self.screen)
         
         self.running = True
@@ -26,10 +28,12 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN and not self.player.is_moving:
+                check_pos = (self.player.x + self.player.direction[0],
+                               self.player.y + self.player.direction[1])
                 if event.key == pygame.K_SPACE:
-                    check_pos = (self.player.x + self.player.direction[0],
-                            self.player.y + self.player.direction[1])
-                    self.world.check_collection(check_pos)
+                    self.world.check_collection(check_pos, self.stats)
+                elif event.key == pygame.K_r:
+                    self.world.try_remove_rock(check_pos, self.stats)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_LSHIFT:
                     self.player.is_running = True
@@ -51,6 +55,7 @@ class Game:
                 moved = self.player.try_move([1, 0], self.world)
             
             if moved:
+                self.stats.move_made()
                 self.last_movement_time = current_time
 
     def update(self):
@@ -59,7 +64,7 @@ class Game:
         self.world.update(dt)
 
     def render(self):
-        self.renderer.render(self.world, self.player)
+        self.renderer.render(self.world, self.player, self.stats)
         self.clock.tick(60)
 
     def run(self):

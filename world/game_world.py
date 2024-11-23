@@ -5,14 +5,16 @@ from entities.base_entity import BaseEntity
 from entities.items import BaseItem, Stick
 from entities.obstacles import BaseObstacle, Rock
 from .path_finder import PathFinder, PathFinderCache
+from stats import GameStats
 
 class GameWorld:
-    def __init__(self):
+    def __init__(self, stats):
         self.obstacles: List[BaseObstacle] = []
         self.items: List[BaseItem] = []
         self.collected_items = 0
         self.path_cache = PathFinderCache()
         self.grid: Dict[Tuple[int, int], BaseEntity] = {}
+        self.stats = stats
         self._generate_rocks()
         self.spawn_new_stick()
 
@@ -70,44 +72,40 @@ class GameWorld:
                 self.obstacles.append(rock)
                 self.add_to_grid(rock)
                 rocks_placed += 1
+                
+        # Update stats with initial rocks
+        if hasattr(self, 'stats'):  # In case stats hasn't been set yet
+            self.stats.set_initial_rocks(rocks_placed)
 
-    def spawn_new_rock(self, player_pos: Tuple[int, int]) -> bool:
+    def spawn_new_rock(self, player_pos: Tuple[int, int], stats: GameStats) -> bool:
         """
         Try to spawn a new rock avoiding the player position.
-        Now tries all available positions if necessary.
+        Only rocks block accessibility, but we won't place on players or items.
         """
-        # Get all valid positions
-        empty_positions = [
-            (x, y) 
-            for x in range(1, GRID_SIZE-1)
-            for y in range(1, GRID_SIZE-1)
-            if not self._is_position_blocked((x, y), player_pos)
-        ]
-        
-        if not empty_positions:
-            return False
-            
-        # Shuffle positions for randomness
-        random.shuffle(empty_positions)
+        # Get current rock positions
         rocks = self._get_rock_positions()
         
-        # Try each empty position
-        for pos in empty_positions:
-            # Check cache first
-            cached_result = self.path_cache.get(rocks, pos)
-            if cached_result is not None:
-                accessible = cached_result
-            else:
-                accessible = PathFinder.is_map_accessible(rocks, pos)
-                self.path_cache.set(rocks, pos, accessible)
-
-            if accessible:
+        # Get candidate positions (excluding player and items)
+        blocked_for_placement = {player_pos}  # Initial positions we can't place on
+        blocked_for_placement.update((item.x, item.y) for item in self.items)
+        
+        # Try all valid positions that aren't blocked for initial placement
+        candidates = PathFinder.VALID_POSITIONS - blocked_for_placement
+        
+        for pos in candidates:
+            # Skip if there's already a rock here
+            if pos in rocks:
+                continue
+                
+            # Check if placing a rock here maintains accessibility
+            if PathFinder.is_map_accessible(rocks, pos):
                 x, y = pos
                 rock = Rock(x, y)
                 self.obstacles.append(rock)
                 self.add_to_grid(rock)
+                stats.rock_spawned()
                 return True
-                
+        
         return False
 
     def spawn_new_stick(self) -> None:
@@ -119,19 +117,39 @@ class GameWorld:
             self.items.append(stick)
             self.add_to_grid(stick)
 
-    def check_collection(self, position: Tuple[int, int]) -> None:
-        """Check if there's an item to collect and handle collection"""
+    def try_remove_rock(self, position: Tuple[int, int], stats: GameStats) -> bool:
+        """
+        Try to remove a rock by spending a stick point.
+        Returns True if rock was removed, False otherwise.
+        """
+        entity = self.get_entity_at(position)
+        if isinstance(entity, Rock) and stats.sticks_collected > 0:
+            # Don't allow removing border rocks
+            x, y = position
+            if x == 0 or x == GRID_SIZE-1 or y == 0 or y == GRID_SIZE-1:
+                return False
+                
+            # Remove the rock
+            self.obstacles.remove(entity)
+            self.remove_from_grid(position)
+            # Spend a stick point
+            stats.spend_stick()
+            # Update empty cells count
+            stats.rock_removed()
+            return True
+        return False
+
+    def check_collection(self, position: Tuple[int, int], stats: GameStats) -> None:
+        """Check if there's an item to collect"""
         entity = self.get_entity_at(position)
         if isinstance(entity, BaseItem) and entity.is_collectible:
             entity.on_collect()
             self.items.remove(entity)
             self.remove_from_grid(position)
-            self.collected_items += 1
             if isinstance(entity, Stick):
+                stats.stick_collected()
+                self.spawn_new_rock(position, stats)
                 self.spawn_new_stick()
-                # Spawn a new rock when stick is collected
-                player_pos = position  # Use collection position as player position
-                self.spawn_new_rock(player_pos)
 
     def update(self, dt: float) -> None:
         """Update all entities in the world"""
