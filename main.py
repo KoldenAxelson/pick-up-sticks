@@ -10,15 +10,18 @@ CELL_SIZE = 30
 GRID_SIZE = 20
 WINDOW_SIZE = CELL_SIZE * 11  # Visible area is 11x11 with player in center
 WORLD_SIZE = GRID_SIZE * CELL_SIZE
-PLAYER_POS = [GRID_SIZE // 2, GRID_SIZE // 2]  # Start in middle
+PLAYER_POS = [GRID_SIZE // 2, GRID_SIZE // 2]  # Grid position
+PLAYER_PIXEL_POS = [PLAYER_POS[0] * CELL_SIZE, PLAYER_POS[1] * CELL_SIZE]  # Actual pixel position
 PLAYER_DIR = [0, -1]  # Start facing up
 ROCK_COUNT = 10
 MOVEMENT_DELAY = 0.15  # Seconds between movements when key is held
+MOVEMENT_SPEED = 4  # Pixels per frame
 
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
+BLUE = (0, 100, 255)
 BROWN = (139, 69, 19)
 GRAY = (128, 128, 128)
 
@@ -27,10 +30,12 @@ screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
 pygame.display.set_caption('Pick Up Sticks')
 clock = pygame.time.Clock()
 
+running = True
+
 def spawn_stick(rocks, player_pos):
     """Spawn a single stick in a valid position"""
     while True:
-        x = random.randint(1, GRID_SIZE-2)  # Keep away from borders
+        x = random.randint(1, GRID_SIZE-2)
         y = random.randint(1, GRID_SIZE-2)
         if (x, y) not in rocks and (x, y) != tuple(player_pos):
             return (x, y)
@@ -38,12 +43,12 @@ def spawn_stick(rocks, player_pos):
 # Generate border rocks
 rocks = set()
 for x in range(GRID_SIZE):
-    rocks.add((x, 0))  # Top border
-    rocks.add((x, GRID_SIZE-1))  # Bottom border
-    rocks.add((0, x))  # Left border
-    rocks.add((GRID_SIZE-1, x))  # Right border
+    rocks.add((x, 0))
+    rocks.add((x, GRID_SIZE-1))
+    rocks.add((0, x))
+    rocks.add((GRID_SIZE-1, x))
 
-# Generate random rock positions (interior rocks)
+# Generate random rock positions
 rock_count = 0
 while rock_count < ROCK_COUNT:
     x = random.randint(1, GRID_SIZE-2)
@@ -56,7 +61,8 @@ while rock_count < ROCK_COUNT:
 current_stick = spawn_stick(rocks, PLAYER_POS)
 collected_sticks = 0
 last_movement_time = time.time()
-running = True
+is_moving = False
+target_pixel_pos = None
 
 def draw_grid_object(surface, color, grid_pos, camera_offset):
     """Draw an object aligned to the grid with the camera offset"""
@@ -68,10 +74,8 @@ def draw_grid_object(surface, color, grid_pos, camera_offset):
 
 def try_move(direction):
     """Attempt to move in the given direction"""
-    global PLAYER_POS, PLAYER_DIR
-    new_pos = PLAYER_POS.copy()
-    new_pos[0] += direction[0]
-    new_pos[1] += direction[1]
+    global PLAYER_POS, PLAYER_DIR, target_pixel_pos, is_moving
+    new_pos = [PLAYER_POS[0] + direction[0], PLAYER_POS[1] + direction[1]]
     PLAYER_DIR = direction
     
     # Check if move is valid
@@ -79,10 +83,36 @@ def try_move(direction):
     if (0 < new_pos[0] < GRID_SIZE-1 and 
         0 < new_pos[1] < GRID_SIZE-1 and 
         new_pos_tuple not in rocks and
-        new_pos_tuple != current_stick):
+        new_pos_tuple != current_stick and
+        not is_moving):  # Only start new movement if not already moving
+        
+        # Set target position in pixels
+        target_pixel_pos = [new_pos[0] * CELL_SIZE, new_pos[1] * CELL_SIZE]
+        is_moving = True
         PLAYER_POS = new_pos
         return True
     return False
+
+def update_movement():
+    """Update smooth movement between cells"""
+    global PLAYER_PIXEL_POS, is_moving, target_pixel_pos
+    
+    if is_moving and target_pixel_pos:
+        dx = target_pixel_pos[0] - PLAYER_PIXEL_POS[0]
+        dy = target_pixel_pos[1] - PLAYER_PIXEL_POS[1]
+        
+        # Calculate movement this frame
+        if abs(dx) <= MOVEMENT_SPEED and abs(dy) <= MOVEMENT_SPEED:
+            # Close enough to snap to target
+            PLAYER_PIXEL_POS = target_pixel_pos.copy()
+            is_moving = False
+            target_pixel_pos = None
+        else:
+            # Move towards target
+            if dx != 0:
+                PLAYER_PIXEL_POS[0] += MOVEMENT_SPEED * (1 if dx > 0 else -1)
+            if dy != 0:
+                PLAYER_PIXEL_POS[1] += MOVEMENT_SPEED * (1 if dy > 0 else -1)
 
 while running:
     current_time = time.time()
@@ -90,8 +120,7 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.KEYDOWN:
-            # Handle space key for stick collection
+        elif event.type == pygame.KEYDOWN and not is_moving:
             if event.key == pygame.K_SPACE:
                 check_pos = (PLAYER_POS[0] + PLAYER_DIR[0], 
                            PLAYER_POS[1] + PLAYER_DIR[1])
@@ -100,8 +129,8 @@ while running:
                     current_stick = spawn_stick(rocks, PLAYER_POS)
     
     # Handle continuous movement
-    keys = pygame.key.get_pressed()
-    if current_time - last_movement_time >= MOVEMENT_DELAY:
+    if not is_moving and current_time - last_movement_time >= MOVEMENT_DELAY:
+        keys = pygame.key.get_pressed()
         moved = False
         if keys[pygame.K_w]:
             moved = try_move([0, -1])
@@ -114,13 +143,16 @@ while running:
         
         if moved:
             last_movement_time = current_time
-
+    
+    # Update movement
+    update_movement()
+    
     # Drawing
     screen.fill(BLACK)
     
-    # Calculate camera offset to center player
-    camera_x = PLAYER_POS[0] * CELL_SIZE - WINDOW_SIZE // 2
-    camera_y = PLAYER_POS[1] * CELL_SIZE - WINDOW_SIZE // 2
+    # Calculate camera offset based on pixel position
+    camera_x = PLAYER_PIXEL_POS[0] - WINDOW_SIZE // 2
+    camera_y = PLAYER_PIXEL_POS[1] - WINDOW_SIZE // 2
     camera_offset = (camera_x, camera_y)
     
     # Draw rocks
@@ -130,16 +162,20 @@ while running:
     # Draw current stick
     draw_grid_object(screen, BROWN, current_stick, camera_offset)
     
-    # Draw player (centered on grid)
-    player_screen_pos = (WINDOW_SIZE // 2 - CELL_SIZE // 2, 
-                        WINDOW_SIZE // 2 - CELL_SIZE // 2)
-    pygame.draw.rect(screen, RED,
-                    (player_screen_pos[0]+(CELL_SIZE//2), player_screen_pos[1]+(CELL_SIZE//2), 
+    # Draw player with smooth position
+    player_screen_x = WINDOW_SIZE // 2 - CELL_SIZE // 2
+    player_screen_y = WINDOW_SIZE // 2 - CELL_SIZE // 2
+    
+    # Change color based on movement state
+    player_color = BLUE if is_moving else RED
+    
+    pygame.draw.rect(screen, player_color,
+                    (player_screen_x+(CELL_SIZE//2), player_screen_y+(CELL_SIZE//2), 
                      CELL_SIZE-2, CELL_SIZE-2))
     
     # Draw direction indicator
-    indicator_x = player_screen_pos[0] + PLAYER_DIR[0] * CELL_SIZE * 0.3 + CELL_SIZE
-    indicator_y = player_screen_pos[1] + PLAYER_DIR[1] * CELL_SIZE * 0.3 + CELL_SIZE
+    indicator_x = player_screen_x + PLAYER_DIR[0] * CELL_SIZE * 0.3 + CELL_SIZE
+    indicator_y = player_screen_y + PLAYER_DIR[1] * CELL_SIZE * 0.3 + CELL_SIZE
     pygame.draw.circle(screen, WHITE, (int(indicator_x), int(indicator_y)), 5)
     
     # Draw stick counter
